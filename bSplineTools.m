@@ -216,7 +216,8 @@ classdef bSplineTools
             % x vector of design sites
             % dr order of the derivative (default = 1)
             %
-            % D = obj.diffBasis(x) calculates the first derivative
+            % D = obj.diffBasis(x) % calculates the first derivative
+            % D = obj.diffBasis(x) % calculates the rth derivative
             
             x = x(:);
             x = obj.code(x);
@@ -263,7 +264,8 @@ classdef bSplineTools
             % x vector of design sites
             % dr order of the derivative (default = 1)
             %
-            % dy = obj.diffBasis(x,2) calculates the second derivative at x
+            % dy = obj.calcDerivative(x,2) calculates the second derivative
+            % at x
             x = x(:);
             B = obj.diffBasis(x,dr);
             dy = B*obj.alpha;
