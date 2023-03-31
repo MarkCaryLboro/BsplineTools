@@ -187,7 +187,7 @@ classdef bSplineTools
            
             x = x(:);       
             x = obj.code(x);      % work in the interval [0,1]
-            A = myBspline.phi_calc(obj.akc,obj.d,x); % basis function matrix
+            A = bSplineTools.phi_calc(obj.akc,obj.d,x); % basis function matrix
         end
         
         function y = eval(obj,x)
