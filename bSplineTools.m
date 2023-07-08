@@ -550,9 +550,106 @@ classdef bSplineTools
             K = obj.nb + obj.k + 1;
             a = N*log(s2) + 2*K;
         end
-    end
+
+        function [ C, Ceq ] = evalNonlinConstraints( obj, x, conStructure )
+            %--------------------------------------------------------------
+            % Evaluate the nonlinear constraints
+            % 
+            % [ C, Ceq ] = obj.evalNonlinConstraints( x, conStructure );
+            %
+            % Input Arguments:
+            %
+            % x            --> (double) regressor variable
+            % conStructure --> (struct) a multi-dimensional structure 
+            % specifiying the necessary nonlinear constraints. The 
+            % structure must have fields:
+            %
+            % derivative    --> set to 0,1 or 2 {0} to specify the spline
+            %                   derivative to which the constraint applies.
+            % type          --> set to '==','>=' or '<='
+            % value         --> constraint bound value
+            % x             --> x-ordinates at which constraints apply.
+            %                   Leave empty to specify all training
+            %                   x-ordinates
+            %
+            % For example, to specify the constraint that the
+            % minimum prediction from the spline must be >=10 
+            % at x = -2 and x = -1.5, specify:
+            %
+            % conStructure.derivative = 0;
+            % conStructure.type = '>=';
+            % conStructure.value = 10;
+            % conStructure.x = [-2;-1.5];
+            %
+            % Now assume that a second constraint applies; namely, that the
+            % secondt derivative of the spline must be negative over all the 
+            % training points. Then set:
+            %
+            % conStructure(2).derivative = 2;
+            % conStructure(2).type = '<=';
+            % conStructure(2).value = 0;
+            % conStructure(2).x = [];
+            %--------------------------------------------------------------
+            arguments
+                obj          (1,1) bSplineTools
+                x            (:,1) double
+                conStructure (1,:) struct
+            end
+            numCon = max(size(conStructure));
+            C = [];
+            Ceq = [];
+
+            for q = 1:numCon
+                %----------------------------------------------------------
+                % Process the constraints one at a time.....
+                %----------------------------------------------------------
+
+                % Set-up the evaluation data
+                if isempty(conStructure(q).x)
+                    xdata = x;                                              % evaluate over the data supplied
+                else
+                    xdata = conStructure(q).x;
+                end
+
+                value = conStructure(q).value;
+                if isempty(value)
+                    value = 0;
+                end
+
+                derivative = conStructure(q).derivative;
+
+                if derivative<1
+                    % Constraint is on the 0th derivative (spline
+                    % value)
+                    con = obj.eval(xdata);
+                else
+                    % Constraint is on the dth derivative
+                    con = obj.calcDerivative(xdata,derivative);
+                end
+
+                % process the type of constraint
+                switch conStructure(q).type
+                    case '=='
+                        % Equality constraint
+                        Ceq = [Ceq;(con - value)]; %#ok<AGROW>
+                    case {'<=', '=<'}
+                        % Inequality constraint <=
+                        C = [C;(con - value)]; %#ok<AGROW>
+                    case {'>=', '=>'}
+                        % Inequality constraint >=
+                        C = [C;(value - con)]; %#ok<AGROW>
+                    otherwise
+                        % Unsupported case....
+                        fprintf('\n... ERROR in n-dimensional constraint structure at dimension %g ...\n',q);
+                end
+            end
+        end % evalNonlinConstraints
+    end % ordinary methods
     
-    methods (Access = private, Hidden = true)
+    methods ( Access = protected )
+    end % protected methods
+
+    methods ( Access = private )
                 
         function [L,coeff] = costFcn(obj,k,x,y)
             % Penalised least squares cost function for optimal knot
@@ -626,53 +723,57 @@ classdef bSplineTools
             [~,obj.alpha] = obj.costFcn(k,x,y);
             
             %--------------------------------------------------------------
+            % Evaluate the constraints
+            %--------------------------------------------------------------
+            [ C, Ceq ] =  obj.evalNonlinConstraints( x, conStructure );
+            %--------------------------------------------------------------
             % Decode the constraint structure
             %--------------------------------------------------------------
-            numCon = max(size(conStructure));            
-            C = [];
-            Ceq = [];
-            
-            for q = 1:numCon
-                % Process the constraints one at a time.....
-                
-                % Set-up the evaluation data 
-                if isempty(conStructure(q).x)
-                    xdata = x; % evaluate over the whole training set
-                else
-                    xdata = conStructure(q).x;
-                end
-                
-                value = conStructure(q).value;
-                if isempty(value)
-                    value = 0;
-                end
-                
-                derivative = conStructure(q).derivative;
-                if derivative<1
-                    % Constraint is on the 0th derivative (spline
-                    % value)
-                    con = obj.eval(xdata);
-                else
-                    % Constraint is on the dth derivative
-                    con = obj.calcDerivative(xdata,derivative);
-                end
-                
-                % process the type of constraint
-                switch conStructure(q).type
-                    case '=='
-                        % Equality constraint
-                        Ceq = [Ceq;(con - value)]; %#ok<AGROW>
-                    case {'<=', '=<'}
-                        % Inequality constraint <=
-                        C = [C;(con - value)]; %#ok<AGROW>
-                    case {'>=', '=>'}
-                        % Inequality constraint >=
-                        C = [C;(value - con)]; %#ok<AGROW>
-                    otherwise
-                        % Unsupported case....
-                        fprintf('\n... ERROR in n-dimensional constraint structure at dimension %g ...\n',q);
-                end
-            end
+%             numCon = max(size(conStructure));            
+%             C = [];
+%             Ceq = [];
+%             
+%             for q = 1:numCon
+%                 % Process the constraints one at a time.....
+%                 
+%                 % Set-up the evaluation data 
+%                 if isempty(conStructure(q).x)
+%                     xdata = x; % evaluate over the whole training set
+%                 else
+%                     xdata = conStructure(q).x;
+%                 end
+%                 
+%                 value = conStructure(q).value;
+%                 if isempty(value)
+%                     value = 0;
+%                 end
+%                 
+%                 derivative = conStructure(q).derivative;
+%                 if derivative<1
+%                     % Constraint is on the 0th derivative (spline
+%                     % value)
+%                     con = obj.eval(xdata);
+%                 else
+%                     % Constraint is on the dth derivative
+%                     con = obj.calcDerivative(xdata,derivative);
+%                 end
+%                 
+%                 % process the type of constraint
+%                 switch conStructure(q).type
+%                     case '=='
+%                         % Equality constraint
+%                         Ceq = [Ceq;(con - value)]; %#ok<AGROW>
+%                     case {'<=', '=<'}
+%                         % Inequality constraint <=
+%                         C = [C;(con - value)]; %#ok<AGROW>
+%                     case {'>=', '=>'}
+%                         % Inequality constraint >=
+%                         C = [C;(value - con)]; %#ok<AGROW>
+%                     otherwise
+%                         % Unsupported case....
+%                         fprintf('\n... ERROR in n-dimensional constraint structure at dimension %g ...\n',q);
+%                 end
+%             end
         end  
         
         function d = delta(obj, x,  threshold)
@@ -684,7 +785,7 @@ classdef bSplineTools
             
             d = threshold - obj.eval(x);
         end
-    end
+    end % private methods
     
     methods (Static =  true, Hidden = true)
         % Static methods
