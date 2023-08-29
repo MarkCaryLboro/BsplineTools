@@ -232,7 +232,7 @@ classdef bSplineTools
             end
             
             augKnot = [zeros(obj.m-r,1);obj.nc;ones(obj.m-r,1)];
-            D = myBspline.phi_calc(augKnot,obj.d-r,x); % Calculate the (m-r)th basis functions
+            D = obj.phi_calc(augKnot,obj.d-r,x); % Calculate the (m-r)th basis functions
            
             for i=1:r
                 % recursively calculate the derivative matrices H and L
