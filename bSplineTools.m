@@ -43,7 +43,7 @@ classdef bSplineTools
             % lo = data low range limit
             % hi = data hi range limit
             %
-            % obj = myBspline(dx,ks)
+            % obj = bSplineTools(dx,ks,lo,hi)
             
             if nargin>1 
                 obj.n = ks;
@@ -532,8 +532,8 @@ classdef bSplineTools
         function G = get.Gx(obj)
             % Return x-dimensional penalty function
             if obj.k>1
-                Gref = myBspline.Jupp(obj.kref,obj.a,obj.b);
-                G = myBspline.Jupp(obj.n,obj.a,obj.b);
+                Gref = obj.Jupp(obj.kref,obj.a,obj.b);
+                G = obj.Jupp(obj.n,obj.a,obj.b);
                 G = 1 + (obj.eta-1)*G/Gref;
             else
                 G = 1;  % No penalty if there are no knots in this dimension
@@ -563,7 +563,7 @@ classdef bSplineTools
             % k     --> knot sequence
             % x     --> x-data
             % y     --> y-data
-            % obj   --> myBspline object
+            % obj   --> bSplineTools object
             
             k = sort(k);
             obj.n = obj.decode(k);      % Assign knot sequence
@@ -584,7 +584,7 @@ classdef bSplineTools
             %
             % x     --> Regressor variable
             % y     --> Response variable
-            % obj   --> Current myBspline object
+            % obj   --> Current Bspline object
             %
             % conStructure is a multi-dimensional structure specifiying the
             % necessary constraints. The structure must have fields:
