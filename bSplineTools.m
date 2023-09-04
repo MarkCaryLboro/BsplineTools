@@ -2,13 +2,13 @@ classdef bSplineTools
     % A class to fit a 1-dimensional b-spline of arbitrary order.
     
     properties (GetAccess = public, SetAccess = public)
-        d = 3;      % degree of interpolating polynomial
-        n = 0.5;    % knot sequence in natural units
-        a = 0;      % lower limit of data
-        b = 1;      % upper limit of data
-        alpha;      % linear spline coefficients
-        x;          % input data
-        y;          % response data
+        d = 3                   % degree of interpolating polynomial
+        n     ( :, 1 ) = 0.5    % knot sequence in natural units
+        a = 0                   % lower limit of data
+        b = 1                   % upper limit of data
+        alpha ( :, 1)           % linear spline coefficients
+        x                       % input data
+        y                       % response data
     end
     
     properties (GetAccess = public, SetAccess = protected)
