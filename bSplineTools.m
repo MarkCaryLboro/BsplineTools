@@ -178,6 +178,60 @@ classdef bSplineTools
             h = ah.Children;
             leg = legend({'B-Spline','Fit Data', 'Knots'},'Location','NorthWest');
         end
+
+        function  [ C, Ceq ] = evalNonlinConstraints( obj, X, Con )
+            %--------------------------------------------------------------
+            % Evaluate the nonlinear spline constraints
+            %
+            % [ C, Ceq ] = obj.evalNonlinConstraints( X, Con );
+            %
+            % Input Arguments:
+            %
+            % X     --> (double) Data points at which to evaluate the 
+            %           constraints
+            % Con   --> (struct) Structure defining the constraint with
+            %           fields:
+            %
+            % Output Arguments:
+            %
+            % C     --> (double) Nonlinear inequality constraints
+            % Ceq   --> (double) Nonlinear equality constraints
+            %--------------------------------------------------------------
+            C = [];
+            Ceq = [];
+            NumCon = max( size( Con ) );
+            for Q = 1:NumCon
+                %----------------------------------------------------------
+                % Process the constraints one at a time.....
+                %----------------------------------------------------------
+                Value = Con( Q ).value;
+                if isempty( Value )
+                    Value = 0;
+                end
+                Derivative = Con(Q).derivative;
+                %----------------------------------------------------------
+                % Constraint is on the dth derivative
+                %----------------------------------------------------------
+                Constraint = obj.calcDerivative( X, Derivative );
+                %----------------------------------------------------------
+                % process the type of constraint
+                %----------------------------------------------------------
+                switch Con(Q).type
+                    case '=='
+                        % Equality constraint
+                        Ceq = [Ceq;(Constraint - Value)]; %#ok<AGROW>
+                    case {'<=', '=<'}
+                        % Inequality constraint <=
+                        C = [C;(Constraint - Value)]; %#ok<AGROW>
+                    case {'>=', '=>'}
+                        % Inequality constraint >=
+                        C = [C;(Value - Constraint)]; %#ok<AGROW>
+                    otherwise
+                        % Unsupported case....
+                        fprintf('\n... ERROR in n-dimensional constraint structure at dimension %g ...\n',Q);
+                end
+            end
+        end % evalNonlinConstraints
         
         function A = basis(obj,x)
             % Calculate basis functions for spline for the current knot
@@ -673,7 +727,7 @@ classdef bSplineTools
                 end
             end
         end  
-        
+
         function d = delta(obj, x,  threshold)
             % return delta between value and threshold
             % 
