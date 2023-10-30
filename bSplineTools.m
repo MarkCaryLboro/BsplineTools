@@ -271,7 +271,7 @@ classdef bSplineTools
             % dr order of the derivative (default = 1)
             %
             % D = obj.diffBasis(x) % calculates the first derivative
-            % D = obj.diffBasis(x) % calculates the rth derivative
+            % D = obj.diffBasis(x,r) % calculates the rth derivative
             
             x = x(:);
             x = obj.code(x);

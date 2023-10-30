@@ -13,6 +13,7 @@ classdef tensorProductBspline
     properties ( SetAccess = protected, Dependent )
         NumDim  (1,1) int8                                                  % Number of dimensions
         NumBas  (1,1) int16                                                 % Number of basis functions
+        NumKnt  (1,1) int8                                                  % Number of D-dimensional knots
     end % protected properties
 
     methods
@@ -44,7 +45,83 @@ classdef tensorProductBspline
             obj.B = ones( 1, obj.NumDim );
             obj = obj.define1Dsplines();
         end
-
+        
+        function Dx = diffBasis(obj, X, D, Dim )
+            %--------------------------------------------------------------
+            % Calculate the first or second derivative of the tensor 
+            % product basis functions.
+            %
+            % Dx = obj.diffBasis( X, D, Dim );   
+            %
+            % Input Arguments:
+            %
+            % X     --> (double) Nx(obj.NumDim) matrix of input data.
+            % D     --> (int8) Must be either 1 or 2. Default is 1.
+            % Dim   --> (int8) Dimension to differentiate with respect to.
+            %           Default is 1.
+            %--------------------------------------------------------------
+            arguments
+                obj
+                X   (:,:) double { mustBeNonempty( X ) }
+                D   (1,1) int8   { mustBeMember( D, [1, 2] ) } = 1
+                Dim (1,1) int8   { mustBeMember( Dim, [1,2] ) } = 1
+            end
+            [~, C] = size( X );
+            Ok = ( C == obj.NumDim );
+            assert( Ok, "Data must be %3.0f-Dimensional", obj.NumDim );
+            assert( ismember( Dim, 1:obj.NumDim),"Dimension to differentiate must be in the interval [13.0f]", obj.NumDim);
+            
+            for Q = 1:obj.NumDim
+                if ( Q == Dim )
+                    %------------------------------------------------------
+                    % Derivative of the 1-dimensional basis
+                    %------------------------------------------------------
+                    C = obj.Bspline( Q ).diffBasis( X( :, Q ), D );
+                else
+                    %------------------------------------------------------
+                    % One-dimensional basis
+                    %------------------------------------------------------
+                    C = obj.Bspline( Q ).basis( X( :, Q ) );
+                end
+                
+                if ( Q == 1 ) 
+                    %------------------------------------------------------
+                    % Initialise the tensor product basis
+                    %------------------------------------------------------
+                    Dx = C;
+                else
+                    %------------------------------------------------------
+                    % Form the tensor product basis matrix as you go
+                    %------------------------------------------------------
+                    Dx = obj.kron( Dx, C );
+                end
+            end % /Q
+        end % diffBasis
+        
+        function Dy = calcDerivative( obj, X , D, Dim )
+            %--------------------------------------------------------------
+            % Calculate the first of second derivative of the tensor
+            % product spline.
+            %
+            % Dy = obj.calcDerivative( X, D, Dim );
+            %
+            % Input Arguments:
+            %
+            % X     --> (double) Nx(obj.NumDim) matrix of input data.
+            % D     --> (int8) Must be either 1 or 2. Default is 1.
+            % Dim   --> (int8) Dimension to differentiate with respect to.
+            %           Default is 1.
+            %--------------------------------------------------------------
+            arguments
+                obj
+                X   (:,:) double { mustBeNonempty( X ) }
+                D   (1,1) int8   { mustBeMember( D, [1, 2] ) } = 1
+                Dim (1,1) int8   { mustBeMember( Dim, [1,2] ) } = 1
+            end            
+            Dx = obj.diffBasis( X, D, Dim);
+            Dy = Dx * obj.Alpha;
+        end
+        
         function obj = setLowerBounds( obj, A )
             %--------------------------------------------------------------
             % Set the lower data bounds for the input data. Used in coding.
@@ -86,6 +163,28 @@ classdef tensorProductBspline
             obj.B = B;
             obj = obj.define1Dsplines();
         end % setUpperBounds
+
+        function obj = setAlpha( obj, Coef )
+            %--------------------------------------------------------------
+            % Set the coefficient vector for the spline
+            %
+            % obj = obj.setAlpha( Coef )
+            %
+            % Input Arguments:
+            %
+            % Coef --> (double) (obj.NumBas-by-1) vector of coefficients
+            %--------------------------------------------------------------
+            arguments
+                obj  (1,1) tensorProductBspline { mustBeNonempty( obj ) }
+                Coef (:,1) double               { mustBeReal( Coef ),...
+                                                  mustBeVector( Coef ),...
+                                                  mustBeNonempty( Coef ) }
+            end
+            Ok = ( numel( Coef ) == obj.NumBas );
+            assert( Ok, "Coefficient Vector Must Have %3.0f Elements",...
+                                                              obj.NumBas );
+            obj.Alpha = Coef;
+        end % setAlpha
 
         function B = basis( obj, X )
             %--------------------------------------------------------------
@@ -183,6 +282,11 @@ classdef tensorProductBspline
             % Return number of tensor product basis functions
             N = prod( [ obj.Bspline.nb ]);
         end % get.NumBas
+
+        function N = get.NumKnt( obj )
+            % Calculate the number of n-dimensional knots
+            N = prod( [ obj.Bspline.k ] );
+        end
     end % Get/Set methods
 
     methods ( Access = protected )
