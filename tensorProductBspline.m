@@ -7,13 +7,14 @@ classdef tensorProductBspline
         K       (1,:) double          { mustBeVector( K ) }                 % Vector of 1-D spline knot numbers
         A       (1,:) double          { mustBeVector( A ) }                 % Input data lower bounds
         B       (1,:) double          { mustBeVector( B ) }                 % Input data upper bounds
-        Alpha   (:,1) double                                                % Tensor product B-spline coefficient vector
+        Alpha   (:,1) double          { mustBeVector( Alpha ) }             % Tensor product B-spline coefficient vector
     end % protected properties
 
     properties ( SetAccess = protected, Dependent )
         NumDim  (1,1) int8                                                  % Number of dimensions
         NumBas  (1,1) int16                                                 % Number of basis functions
-        NumKnt  (1,1) int8                                                  % Number of D-dimensional knots
+        NumKnt  (1,1) int8                                                  % Number of one-dimensional knots
+        S       (:,:) table                                                 % Summary table for tensor product spline
     end % protected properties
 
     methods
@@ -27,8 +28,6 @@ classdef tensorProductBspline
             %
             % M     --> (1,:) (int8) Vector of spline orders
             % K     --> (1,:) (int8) Vector of number of knots
-            % 
-            % Name-Value Arguments:      
             %--------------------------------------------------------------
             arguments
                 M       (1,:) int8 
@@ -45,6 +44,31 @@ classdef tensorProductBspline
             obj.B = ones( 1, obj.NumDim );
             obj = obj.define1Dsplines();
         end
+
+        function obj = setKnotSequences( obj, T )
+            %--------------------------------------------------------------
+            % Set the one-dimensional knot sequences
+            %
+            % obj = obj.setKnotSequences( T );
+            %
+            % Input Arguments:
+            %
+            % T --> (cell) (1-by-obj.NumDim) cell array of knot sequences
+            %--------------------------------------------------------------
+            arguments
+                obj (1,1) tensorProductBspline { mustBeNonempty( obj ) }
+                T   (1,:) cell                 { mustBeNonempty( T ) }
+            end
+            Ok = ( numel( T ) == obj.NumDim );
+            assert( Ok, "Number of knot sequences must be %3.0f",...
+                        obj.NumDim );
+            for Q = 1:obj.NumDim
+                %----------------------------------------------------------
+                % Assign the knot sequences
+                %----------------------------------------------------------
+                obj = obj.set1DsplineKnots( T{ Q },Q );
+            end % /Q
+        end % setKnotSequences
         
         function Dx = diffBasis(obj, X, D, Dim )
             %--------------------------------------------------------------
@@ -61,16 +85,26 @@ classdef tensorProductBspline
             %           Default is 1.
             %--------------------------------------------------------------
             arguments
-                obj
+                obj (1,1) tensorProductBspline { mustBeNonempty( obj ) }
                 X   (:,:) double { mustBeNonempty( X ) }
                 D   (1,1) int8   { mustBeMember( D, [1, 2] ) } = 1
-                Dim (1,1) int8   { mustBeMember( Dim, [1,2] ) } = 1
+                Dim (1,1) int8   { mustBeGreaterThan( Dim, 0 ) } = 1
             end
+            %--------------------------------------------------------------
+            % Check dimension of data supplied is correct
+            %--------------------------------------------------------------
             [~, C] = size( X );
             Ok = ( C == obj.NumDim );
             assert( Ok, "Data must be %3.0f-Dimensional", obj.NumDim );
-            assert( ismember( Dim, 1:obj.NumDim),"Dimension to differentiate must be in the interval [13.0f]", obj.NumDim);
-            
+            %--------------------------------------------------------------
+            % Check we are differentiating an existing dimension
+            %--------------------------------------------------------------
+            assert( ismember( Dim, 1:obj.NumDim ),...
+                "Dimension to differentiate must be in the interval [1:%3.0f]",...
+                obj.NumDim);
+            %--------------------------------------------------------------
+            % Differentiate the tensor product basis basis
+            %--------------------------------------------------------------
             for Q = 1:obj.NumDim
                 if ( Q == Dim )
                     %------------------------------------------------------
@@ -97,7 +131,7 @@ classdef tensorProductBspline
                 end
             end % /Q
         end % diffBasis
-        
+
         function Dy = calcDerivative( obj, X , D, Dim )
             %--------------------------------------------------------------
             % Calculate the first of second derivative of the tensor
@@ -113,7 +147,7 @@ classdef tensorProductBspline
             %           Default is 1.
             %--------------------------------------------------------------
             arguments
-                obj
+                obj (1,1) tensorProductBspline { mustBeNonempty( obj ) }
                 X   (:,:) double { mustBeNonempty( X ) }
                 D   (1,1) int8   { mustBeMember( D, [1, 2] ) } = 1
                 Dim (1,1) int8   { mustBeMember( Dim, [1,2] ) } = 1
@@ -122,47 +156,25 @@ classdef tensorProductBspline
             Dy = Dx * obj.Alpha;
         end
         
-        function obj = setLowerBounds( obj, A )
+        function obj = setBounds( obj, A, B )
             %--------------------------------------------------------------
-            % Set the lower data bounds for the input data. Used in coding.
+            % Set the bounds for the spline inputs. Used to define coding.
             %
-            % obj = obj.setLowerBounds( A );
+            % obj = obj.setBounds( A, B );
             %
             % Input Arguments:
             %
             % A --> (double) [1 x obj.NumDim] vector of lower data bounds
+            % B --> (double) [1 x obj.NumDim] vector of upper data bounds
             %--------------------------------------------------------------
             arguments
                 obj (1,1) tensorProductBspline { mustBeNonempty( obj ) }
                 A   (1,:) double               { mustBeNonempty( A ) }
-            end
-            Ok = ( numel( A ) == obj.NumDim );
-            assert( Ok, "Dimension of lower bound argument must be: %3.0f",...
-                        obj.NumDim );
-            obj.A = A;
-            obj = obj.define1Dsplines();
-        end % setLowerBounds
-
-        function obj = setUpperBounds( obj, B )
-            %--------------------------------------------------------------
-            % Set the upper data bounds for the input data. Used in coding.
-            %
-            % obj = obj.setUpperBounds( B );
-            %
-            % Input Arguments:
-            %
-            % B --> (double) [1 x obj.NumDim] vector of lower data bounds
-            %--------------------------------------------------------------
-            arguments
-                obj (1,1) tensorProductBspline { mustBeNonempty( obj ) }
                 B   (1,:) double               { mustBeNonempty( B ) }
-            end
-            Ok = ( numel( B ) == obj.NumDim );
-            assert( Ok, "Dimension of upper bound argument must be %3.0f",...
-                        obj.NumDim );
-            obj.B = B;
-            obj = obj.define1Dsplines();
-        end % setUpperBounds
+            end     
+            obj = obj.setLowerBounds( A );
+            obj = obj.setUpperBounds( B );
+        end % setBounds
 
         function obj = setAlpha( obj, Coef )
             %--------------------------------------------------------------
@@ -253,7 +265,107 @@ classdef tensorProductBspline
         end % eval
     end % Ordinary methods
 
-    methods ( Access = public, Static = true )
+    methods ( Access = protected )
+        function obj = setLowerBounds( obj, A )
+            %--------------------------------------------------------------
+            % Set the lower data bounds for the input data. Used in coding.
+            %
+            % obj = obj.setLowerBounds( A );
+            %
+            % Input Arguments:
+            %
+            % A --> (double) [1 x obj.NumDim] vector of lower data bounds
+            %--------------------------------------------------------------
+            arguments
+                obj (1,1) tensorProductBspline { mustBeNonempty( obj ) }
+                A   (1,:) double               { mustBeNonempty( A ) }
+            end
+            Ok = ( numel( A ) == obj.NumDim );
+            assert( Ok, "Dimension of lower bound argument must be: %3.0f",...
+                        obj.NumDim );
+            obj.A = A;
+            for Q = 1:obj.NumDim
+                %----------------------------------------------------------
+                % Set the lower bounds
+                %----------------------------------------------------------
+                obj.Bspline( Q ).a = A( Q );
+            end % /Q
+        end % setLowerBounds
+
+        function obj = setUpperBounds( obj, B )
+            %--------------------------------------------------------------
+            % Set the upper data bounds for the input data. Used in coding.
+            %
+            % obj = obj.setUpperBounds( B );
+            %
+            % Input Arguments:
+            %
+            % B --> (double) [1 x obj.NumDim] vector of upper data bounds
+            %--------------------------------------------------------------
+            arguments
+                obj (1,1) tensorProductBspline { mustBeNonempty( obj ) }
+                B   (1,:) double               { mustBeNonempty( B ) }
+            end
+            Ok = ( numel( B ) == obj.NumDim );
+            assert( Ok, "Dimension of upper bound argument must be %3.0f",...
+                        obj.NumDim );
+            obj.B = B;
+            for Q = 1:obj.NumDim
+                %----------------------------------------------------------
+                % Set the upper bounds
+                %----------------------------------------------------------
+                obj.Bspline( Q ).b = B( Q );
+            end % /Q
+        end % setUpperBounds
+
+        function obj = set1DsplineKnots( obj, K, Dim )
+            %--------------------------------------------------------------
+            % Set the knots for the specified dimension
+            %
+            % obj = obj.set1DsplineKnots( K, Dim );
+            %
+            % Input Arguments:
+            %
+            % K     --> (double) Vector of one dimensional knot locations
+            % Dim   --> (int8) Pointer to 1-D spline
+            %--------------------------------------------------------------
+            arguments
+                obj (1,1) tensorProductBspline { mustBeNonempty( obj ) }
+                K   (:,1) double 
+                Dim (1,1) int8  = 1
+            end
+            %--------------------------------------------------------------
+            % Check knot vector has the correct dimensionality
+            %--------------------------------------------------------------
+            Ok = ( numel( K ) == obj.K( Dim ) ); 
+            assert( Ok, "Number of knots for dimension %3.0f must be %3.0f",...
+                        Dim, obj.K( Dim ) );
+            %--------------------------------------------------------------
+            % Check knots lay within the defined limits    
+            %--------------------------------------------------------------
+            Lo = obj.A( Dim );
+            Hi = obj.B( Dim );
+            Ok = all( K > Lo ) & all( K < Hi );
+            assert( Ok, "Knots must be in the interval ( %6.2f, %6.2f )",...
+                        Lo, Hi );
+            obj.Bspline( Dim ).n = K;
+        end % set1DsplineKnots
+
+        function obj = updateKnotSeq( obj )
+            %--------------------------------------------------------------
+            % Update the knot locations if the coding limits change
+            %
+            % obj = obj.updateKnotSeq();
+            %--------------------------------------------------------------
+            for Q = 1:obj.NumDim
+                Knot = obj.Bspline( Q ).n;                                  % Coded knots
+                Knot = obj.Bspline(Q).decode( Knot );                       % Convert to natural unit scale
+                obj.Bspline( Q ).n = Knot; 
+            end % /Q
+        end % updateKnotSeq
+    end % protected methods
+
+    methods ( Access = protected, Static = true )
         function K = kron( X, Y )
             %--------------------------------------------------------------
             % Form columnar kronecker products for two matrices with the
@@ -285,7 +397,26 @@ classdef tensorProductBspline
 
         function N = get.NumKnt( obj )
             % Calculate the number of n-dimensional knots
-            N = prod( [ obj.Bspline.k ] );
+            N = [ obj.Bspline.k ];
+        end
+
+        function S = get.S( obj )
+            % Generate summary table for tnsor product spline
+            S = table( 'Size', [ obj.NumDim, 5], 'VariableTypes',...
+                [ "double", "double", "int8", "cell", "int8" ]);
+            S.Properties.VariableNames = [ "Lower bound", "Upper Bound",...
+                "Number of Knots", "Knot Locations", "Order"];
+            R = string( 1:obj.NumDim );
+            S.Properties.RowNames = R;
+            for Q = 1:obj.NumDim
+                %----------------------------------------------------------
+                % Fill in the table by rows
+                %----------------------------------------------------------
+                Knot = obj.Bspline( Q ).n;
+                Knot = reshape( Knot, 1, obj.K( Q ) );
+                S( Q, : ) = cell2table( { obj.A( Q ), obj.B( Q ),... 
+                      obj.K( Q ), { Knot }, obj.M( Q ) } );
+            end
         end
     end % Get/Set methods
 
