@@ -44,6 +44,135 @@ classdef tensorProductBspline
             obj.B = ones( 1, obj.NumDim );
             obj = obj.define1Dsplines();
         end
+        
+        function Xc = code( obj, X )
+            %--------------------------------------------------------------
+            % Code the X-input data onto the interval [0,1]
+            %
+            % Xc = obj.code( X );
+            %
+            % Input Arguments:
+            %
+            % X     --> (double) (N-by-obj.NumDim)  
+            %--------------------------------------------------------------
+            arguments
+                obj  (1,1) tensorProductBspline { mustBeNonempty( obj ) }
+                X    (:,:) double               { mustBeNonempty( X ) }
+            end
+            %--------------------------------------------------------------
+            % Ensure input data dimension is consistent
+            %--------------------------------------------------------------
+            Ok = ( size( X, 2 ) == obj.NumDim );
+            assert( Ok, "Data must be %3.0f-dimensional", obj.NumDim);
+            %--------------------------------------------------------------
+            % Decode the data
+            %--------------------------------------------------------------
+            Xc = zeros( size( X ) );
+            for Q = 1:obj.NumDim
+                Xc( :, Q ) = obj.Bspline( Q ).decode( Xc( :, Q ) );
+            end
+        end % code
+
+        function X = decode( obj, Xc )
+            %--------------------------------------------------------------
+            % Decode the X-input data onto the interval [A,B]
+            %
+            % Xc = obj.decode( Xc );
+            %
+            % Input Arguments:
+            %
+            % X     --> (double) (N-by-obj.NumDim)             
+            %--------------------------------------------------------------   
+            arguments
+                obj  (1,1) tensorProductBspline { mustBeNonempty( obj ) }
+                Xc   (:,:)                      { mustBeNonempty( Xc ) }
+            end
+            %--------------------------------------------------------------
+            % Ensure input data dimension is consistent
+            %--------------------------------------------------------------
+            Ok = ( size( Xc, 2 ) == obj.NumDim );
+            assert( Ok, "Data must be %3.0f-dimensional", obj.NumDim);
+            %--------------------------------------------------------------
+            % Decode the data
+            %--------------------------------------------------------------
+            X = zeros( size( Xc ) );
+            for Q = 1:obj.NumDim
+                X( :, Q ) = obj.Bspline( Q ).decode( Xc( :, Q ) );
+            end
+        end % decode
+
+        function Kc = codeKnots( obj, K )
+            %--------------------------------------------------------------
+            % Code the knot sequence onto the interval [0,1]
+            %
+            % Kc = obj.codeKnots( K );
+            %
+            % Input Arguments:
+            %
+            % K     --> (double) array of knot locations in natural units
+            %--------------------------------------------------------------
+            arguments
+                obj (1,1) tensorProductBspline { mustBeNonempty( obj ) }
+                K   (:,:) double               { mustBeNonempty( K ) }
+            end        
+            Sz = obj.K;
+            N = sum( Sz );            
+            Ok = ( N == size( K, 2 ) );
+            assert( Ok, "Coded knot sequence must have %3.0f elements", N );
+            Kc = zeros( size( K ) );
+            Finish = 0;
+            for Q = 1:obj.NumDim
+                Start = Finish + 1;
+                Finish = Start + Sz( Q ) - 1;
+                Knot1D = K( :, Start:Finish );
+                Kc( :, Start:Finish ) = obj.Bspline( Q ).code( Knot1D );
+            end % /Q
+        end % codeKnots
+
+        function K = decodeKnots( obj, Kc )
+            %--------------------------------------------------------------
+            % Decode the knot sequence onto the interval [A,B]
+            %
+            % K = obj.decodeKnots( Kc );
+            %
+            % Input Arguments:
+            %
+            % Kc     --> (double) array of coded knot locations            
+            %--------------------------------------------------------------   
+            arguments
+                obj (1,1) tensorProductBspline { mustBeNonempty( obj ) }
+                Kc  (:,:) double               { mustBeNonempty( Kc ) }
+            end
+            Sz = obj.K;
+            N = sum( Sz );            
+            Ok = ( N == size( Kc, 2 ) );
+            assert( Ok, "Coded knot sequence must have %3.0f elements", N );
+            K = zeros( size( Kc ) );
+            Finish = 0;
+            for Q = 1:obj.NumDim
+                Start = Finish + 1;
+                Finish = Start + Sz( Q ) - 1;
+                Knot1D = Kc( :, Start:Finish );
+                K( :, Start:Finish ) = obj.Bspline( Q ).decode( Knot1D );
+            end % /Q
+        end % decodeKnots
+
+        function obj = setEquiSpacedKnots( obj )
+            %--------------------------------------------------------------
+            % Set all the knot sequences to be equispaced in each
+            % dimension. This is a good initial choice
+            %
+            % obj = obj.setEquiSpacedKnots();
+            %--------------------------------------------------------------
+            T = cell( 1, obj.NumDim );
+            N = obj.NumDim;
+            for Q = 1:N
+                Knot = linspace( obj.A( Q ), obj.B( Q ), obj.K( Q ) + 2 );
+                Knot = Knot( 2:end-1 );
+                T( Q ) = {Knot};
+            end % /Q
+            obj = obj.setKnotSequences( T );
+        end % setEquiSpacedKnots
 
         function obj = setKnotSequences( obj, T )
             %--------------------------------------------------------------
@@ -66,7 +195,7 @@ classdef tensorProductBspline
                 %----------------------------------------------------------
                 % Assign the knot sequences
                 %----------------------------------------------------------
-                obj = obj.set1DsplineKnots( T{ Q },Q );
+                obj = obj.set1DsplineKnots( T{ Q }, Q );
             end % /Q
         end % setKnotSequences
         
@@ -174,6 +303,7 @@ classdef tensorProductBspline
             end     
             obj = obj.setLowerBounds( A );
             obj = obj.setUpperBounds( B );
+            obj = obj.setEquiSpacedKnots();
         end % setBounds
 
         function obj = setAlpha( obj, Coef )

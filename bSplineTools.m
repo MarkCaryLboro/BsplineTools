@@ -83,6 +83,12 @@ classdef bSplineTools
             x(x>obj.b) = obj.b;
         end
         
+        function kn = decodeKnots( obj, Kc )
+            % supply natural knot value
+
+            kn = obj.decode( Kc );
+        end
+
         function X = find(obj, value, plotflg)
             % Find occurences of a value over the interval [a,b]
             %
