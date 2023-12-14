@@ -393,6 +393,39 @@ classdef tensorProductBspline
                 Y = obj.basis( X ) * obj.Alpha;
             end
         end % eval
+
+        function Ax = mesh( obj, N)
+            %--------------------------------------------------------------
+            % 3-D plot of the spline surface
+            %
+            % Ax = obj.mesh( N );
+            %
+            % Input Arguments:
+            %
+            % N  --> (int64) Size of mesh grid for plotting (N x N).
+            %
+            % Output Arguments:
+            %
+            % Ax --> (axes) Handle to mesh axes
+            %--------------------------------------------------------------
+            arguments
+                obj (1,1) tensorProductBspline { mustBeNonempty( obj ) }
+                N   (1,1) int64                { mustBeGreaterThan( N, 1 ) } = 25
+            end        
+            X = linspace(obj.A( 1 ), obj.B( 1 ), N );
+            Y = linspace(obj.A( 2 ), obj.B( 2 ), N );
+            [ X, Y ] = meshgrid( X, Y );
+            Z = obj.eval( [ X( : ), Y( : ) ] );
+            Z = reshape( Z,N, N );
+            figure;
+            Ax = axes;
+            mesh( Ax, X, Y, Z );
+            colormap( Ax, bone(21) );
+            grid( Ax, 'on' );
+            xlabel( "X" )
+            ylabel( "Y" );
+            zlabel( "Z" );
+        end % mesh
     end % Ordinary methods
 
     methods ( Access = protected )
