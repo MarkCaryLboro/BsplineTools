@@ -13,7 +13,6 @@ classdef tensorProductBspline
     properties ( SetAccess = protected, Dependent )
         NumDim  (1,1) int8                                                  % Number of dimensions
         NumBas  (1,1) int16                                                 % Number of basis functions
-        NumKnt  (1,1) int8                                                  % Number of one-dimensional knots
         S       (:,:) table                                                 % Summary table for tensor product spline
     end % protected properties
 
@@ -173,6 +172,32 @@ classdef tensorProductBspline
             end % /Q
             obj = obj.setKnotSequences( T );
         end % setEquiSpacedKnots
+
+        function Seq = convertKnotSequences( obj, K )
+            %--------------------------------------------------------------
+            % Return the tensor product knot sequences as a cell array of 
+            % the appropriate dimension
+            %
+            % Seq = obj.convertKnotSequences( K );
+            %
+            % Input Arguments:
+            %
+            % K --> Vector of knot locations
+            %--------------------------------------------------------------
+            arguments
+                obj (1,1)  tensorProductBspline   { mustBeNonempty( obj ) }
+                K   (1,:)  double                   { mustBeNonempty( K ),...
+                                                      mustBeVector( K ) };
+            end
+            N = obj.NumDim;
+            Finish = 0;
+            Seq = cell( 1, N );
+            for Q = 1:N
+                Start = Finish + 1;
+                Finish = Start + obj.K( Q ) - 1;
+                Seq{ Q } = K( Start:Finish );
+            end % /Q
+        end % convertKnotSequences
 
         function obj = setKnotSequences( obj, T )
             %--------------------------------------------------------------
@@ -420,7 +445,7 @@ classdef tensorProductBspline
             figure;
             Ax = axes;
             mesh( Ax, X, Y, Z );
-            colormap( Ax, bone(21) );
+            colormap( Ax, winter(21) );
             grid( Ax, 'on' );
             xlabel( "X" )
             ylabel( "Y" );
@@ -557,11 +582,6 @@ classdef tensorProductBspline
             % Return number of tensor product basis functions
             N = prod( [ obj.Bspline.nb ]);
         end % get.NumBas
-
-        function N = get.NumKnt( obj )
-            % Calculate the number of n-dimensional knots
-            N = [ obj.Bspline.k ];
-        end
 
         function S = get.S( obj )
             % Generate summary table for tnsor product spline
