@@ -8,6 +8,8 @@ classdef tensorProductBspline
         A       (1,:) double          { mustBeVector( A ) }                 % Input data lower bounds
         B       (1,:) double          { mustBeVector( B ) }                 % Input data upper bounds
         Alpha   (:,1) double          { mustBeVector( Alpha ) }             % Tensor product B-spline coefficient vector
+        Ka      (1,:) double          { mustBeVector( Ka ) }                % Lower bound for knots
+        Kb      (1,:) double          { mustBeVector( Kb ) }                % Upper bound for knots 
     end % protected properties
 
     properties ( SetAccess = protected, Dependent )
@@ -21,7 +23,7 @@ classdef tensorProductBspline
             %--------------------------------------------------------------
             % class constructor: tensorProductBspline
             %
-            % obj = tensorProductBspline( M, K, Name, Value );
+            % obj = tensorProductBspline( M, K );
             %
             % Input Arguments:
             %
@@ -41,9 +43,44 @@ classdef tensorProductBspline
             %--------------------------------------------------------------
             obj.A = zeros( 1, obj.NumDim );
             obj.B = ones( 1, obj.NumDim );
+            obj = obj.setKnotBounds();
             obj = obj.define1Dsplines();
-        end
+        end % constructor
         
+        function obj = setKnotBounds( obj, KA, KB )
+            %--------------------------------------------------------------
+            % Set the lower ans upper bounds for the knots
+            %
+            % obj = obj.setKnotBounds( KA, KB );
+            %
+            % Input Arguments:
+            %
+            % KA --> (double) Lower bound vector for knots
+            % KB --> (double) Upper bound vector for knots
+            %--------------------------------------------------------------
+            arguments
+                obj (1,1) tensorProductBspline { mustBeNonempty( obj ) }
+                KA  (1,:) double               { mustBeVector( KA ) }       = 1.25 * obj.A
+                KB  (1,:) double               { mustBeVector( KB ) }       = 0.75 * obj.B      
+            end
+            %--------------------------------------------------------------
+            % Check bounds are within data range
+            %--------------------------------------------------------------
+            Ok = all( KA >= obj.A );
+            assert( Ok, "At least one lower knot bound is less than the corresponding lower data bound");
+            Ok = all( KB <= obj.B );
+            assert( Ok, "At least one upper knot bound is greater than the corresponding upper data bound");
+            %--------------------------------------------------------------
+            % Set the parameters
+            %--------------------------------------------------------------
+            obj.Ka = KA;
+            obj.Kb = KB;
+            %--------------------------------------------------------------
+            % Redefine the splines
+            %--------------------------------------------------------------
+            obj = obj.define1Dsplines();
+        end % setKnotBounds
+
         function Xc = code( obj, X )
             %--------------------------------------------------------------
             % Code the X-input data onto the interval [0,1]
@@ -166,7 +203,7 @@ classdef tensorProductBspline
             T = cell( 1, obj.NumDim );
             N = obj.NumDim;
             for Q = 1:N
-                Knot = linspace( obj.A( Q ), obj.B( Q ), obj.K( Q ) + 2 );
+                Knot = linspace( obj.Ka( Q ), obj.Kb( Q ), obj.K( Q ) + 2 );
                 Knot = Knot( 2:end-1 );
                 T( Q ) = {Knot};
             end % /Q
@@ -328,7 +365,6 @@ classdef tensorProductBspline
             end     
             obj = obj.setLowerBounds( A );
             obj = obj.setUpperBounds( B );
-            obj = obj.setEquiSpacedKnots();
         end % setBounds
 
         function obj = setAlpha( obj, Coef )
@@ -618,9 +654,11 @@ classdef tensorProductBspline
                 dx = obj.M( Q ) - 1;
                 lo = obj.A( Q );
                 hi = obj.B( Q );
-                ks = linspace( lo, hi, obj.K( Q ) + 2 );
+                ks = linspace( obj.Ka( Q ), obj.Kb( Q ), obj.K( Q ) + 2 );
                 ks = ks( 2:end-1 );
                 obj.Bspline( Q ) = bSplineTools( dx, ks, lo, hi);
+                obj.Bspline( Q ).ka = obj.Ka( Q );
+                obj.Bspline( Q ).kb = obj.Kb( Q );
             end
         end % define1Dsplines
     end % protected methods
