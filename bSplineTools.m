@@ -3,12 +3,14 @@ classdef bSplineTools
     
     properties (GetAccess = public, SetAccess = public)
         d = 3                   % degree of interpolating polynomial
-        n     ( :, 1 ) = 0.5    % knot sequence in natural units
+        n     (:,1) = 0.5       % knot sequence in natural units
         a = 0                   % lower limit of data
         b = 1                   % upper limit of data
-        alpha ( :, 1)           % linear spline coefficients
+        alpha (:,1)             % linear spline coefficients
         x                       % input data
         y                       % response data
+        ka    (1,1)             % Lower spline knot bound
+        kb    (1,1)             % Upper spline knot bound
     end
     
     properties (GetAccess = public, SetAccess = protected)
@@ -83,6 +85,12 @@ classdef bSplineTools
             x(x>obj.b) = obj.b;
         end
         
+        function kn = decodeKnots( obj, Kc )
+            % supply natural knot value
+
+            kn = obj.decode( Kc );
+        end
+
         function X = find(obj, value, plotflg)
             % Find occurences of a value over the interval [a,b]
             %
@@ -271,7 +279,7 @@ classdef bSplineTools
             % dr order of the derivative (default = 1)
             %
             % D = obj.diffBasis(x) % calculates the first derivative
-            % D = obj.diffBasis(x) % calculates the rth derivative
+            % D = obj.diffBasis(x,r) % calculates the rth derivative
             
             x = x(:);
             x = obj.code(x);
@@ -431,8 +439,7 @@ classdef bSplineTools
             else
                 confunc = @(k)obj.constraintGenerator(k,x,y,conStructure);      % apply specified constraints
             end
-            ko = rand(obj.k,100);                                               % [0,1] interval for starting knots
-            ko = 0.6*ko + 0.2;                                                  % map to interval [0.2, 0.8]
+            ko = rand(obj.k,201);                                               % [0,1] interval for starting knots
             x0 = linspace(0,1,obj.k+2).';
             x0 = x0(2:end-1);
             Lold = inf;
@@ -453,10 +460,10 @@ classdef bSplineTools
             % Set up the optimisation problem
             %--------------------------------------------------------------
             S = warning('off', 'all');
-            LB = obj.code(1.05*min(x)*ones(obj.k,1));           % Lower bounds for knot
-            UB = obj.code(0.95*max(x)*ones(obj.k,1));           % Upper bounds for knot
+            LB = obj.code(obj.kb);                                          % Lower bounds for knot
+            UB = obj.code(obj.kb);                                          % Upper bounds for knot
             PROBLEM.objective = cf;
-            PROBLEM.x0 = x0;                                    % Initial knot vector
+            PROBLEM.x0 = x0;                                                % Initial knot vector
             PROBLEM.Aineq = [];
             PROBLEM.bineq = [];
             PROBLEM.Aeq = [];
@@ -493,24 +500,25 @@ classdef bSplineTools
             del = 0.005;
             switch type
                 case 0
-                    lo = obj.a;
-                    hi = obj.b;
+                    % linear spacing
+                    lo = obj.ka;
+                    hi = obj.kb;
                     K = linspace(lo,hi,obj.k+2).';
                 case 1
                     % logarithmic spacing
-                    lo = log10(obj.a);
-                    hi = log10(obj.b);
+                    lo = log10(obj.ka);
+                    hi = log10(obj.kb);
                     K = logspace(lo,hi,obj.k+2).';              
                 otherwise
                     % Reciprical Scaling
-                    lo = obj.a;
-                    hi = obj.b;
+                    lo = obj.ka;
+                    hi = obj.kb;
                     K = linspace(1/lo,1/hi,obj.k+2).';
                     K = 1./K;
             end
             K = K(2:end-1);                             % Return to the correct dimension
             K = K + del*randn(size(K));                 % randomly peturb the knot sequence
-            obj.kref = K;                               % knots must be strictly increasing
+            obj.kref = sort( K );                       % knots must be strictly increasing
         end
     end
     
@@ -544,6 +552,10 @@ classdef bSplineTools
             if nargin>1 && isnumeric(x) && isreal(x) && ~isempty(x)
                 obj.n = sort(x(:)); % make a column vector
             end
+            Idx = ( obj.n < obj.a );                                       %#ok<MCSUP> 
+            obj.n( Idx ) = obj.a;                                          %#ok<MCSUP> 
+            Idx = ( obj.n > obj.kb );                                       %#ok<MCSUP> 
+            obj.n( Idx ) = obj.kb;                                          %#ok<MCSUP> 
         end
         
         function x = get.k(obj)
