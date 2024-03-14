@@ -87,8 +87,13 @@ classdef bSplineTools
         
         function kn = decodeKnots( obj, Kc )
             % supply natural knot value
-
+            
             kn = obj.decode( Kc );
+            %--------------------------------------------------------------
+            % Clip the values to Ka <= K < Kb
+            %--------------------------------------------------------------
+            kn(kn<obj.ka) = obj.ka;
+            kn(kn>obj.kb) = obj.kb;
         end
 
         function X = find(obj, value, plotflg)
