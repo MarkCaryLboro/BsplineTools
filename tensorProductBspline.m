@@ -16,6 +16,7 @@ classdef tensorProductBspline
         NumDim  (1,1) int8                                                  % Number of dimensions
         NumBas  (1,1) int16                                                 % Number of basis functions
         S       (:,:) table                                                 % Summary table for tensor product spline
+        Knots   (:,:) double                                                % List of d-dimensional knots
     end % protected properties
 
     methods
@@ -80,6 +81,79 @@ classdef tensorProductBspline
             %--------------------------------------------------------------
             obj = obj.define1Dsplines();
         end % setKnotBounds
+
+        function obj = set1DknotLocations( obj, K )
+            %--------------------------------------------------------------
+            % Set the 1-dimensional knot locations
+            %
+            % obj = obj.set1DknotLocations( K );
+            %
+            % Input arguments:
+            % 
+            % K --> 1xobj.NumDim (cell) array of knot locations
+            %--------------------------------------------------------------
+            arguments
+                obj (1,1)  tensorProductBspline { mustBeNonempty( obj ) } 
+                K   (1, :) cell                 { mustBeNonempty( K ) }
+            end
+            %--------------------------------------------------------------
+            % Check dimension of K
+            %--------------------------------------------------------------
+            Ok = ( max( size( K ) ) == obj.NumDim );
+            Msg = "Number of 1D knot vectors must be %3.0d";
+            assert( Ok, Msg, obj.NumDim );
+            %--------------------------------------------------------------
+            % Assign the knot locations
+            %--------------------------------------------------------------
+            for Q = 1:obj.NumDim
+                Nk = numel( K{ Q } );
+                obj.K( Q ) = Nk;
+                obj.Bspline( Q ).n = K{ Q };
+            end % /Q
+        end %set1DknotLocations
+
+        function plot2DBasis( obj )
+            %--------------------------------------------------------------
+            % Plot the 2-d basis functions
+            %
+            % obj.plot2DBasis();
+            %--------------------------------------------------------------
+            arguments
+                obj (1,1)  tensorProductBspline { mustBeNonempty( obj ) } 
+            end
+            Ok = ( obj.NumDim == 2 );
+            Msg = "Can only plot 2D basis";
+            assert( Ok, Msg );
+            %--------------------------------------------------------------
+            % Plot the basis function surfaces
+            %--------------------------------------------------------------
+            X = linspace(0,1,51); 
+            Y = linspace(0,1,51).';
+            [ X, Y ] = meshgrid( X, Y );
+            Z = [ X(:), Y(:) ];
+            Z = obj.decode( Z );
+            Bz = obj.basis( Z );
+            KnotLoc = obj.Knots;
+            NumKnots = size( KnotLoc, 1 );
+            for Q = 1:obj.NumBas
+                figure;
+                mesh( X, Y, reshape( Bz( :,Q ), size( X ) ) );
+                grid on;
+                xlabel( "x");
+                ylabel("y");
+                Zlab = strjoin( ["\phi","{"], "_");
+                Zlab = strjoin( [Zlab, num2str( Q ) ], "");
+                Zlab = strjoin( [Zlab, "}"], "" );
+                Zlab = strjoin( [Zlab, "(x,y)", ""]);
+                zlabel( Zlab );
+                hold on
+                for QQ = 1:NumKnots
+                    stem3( KnotLoc( QQ, 1 ), KnotLoc( QQ, 2 ), 1, '^k', ...
+                        'MarkerFaceColor', 'black');
+                end % /QQ
+                hold off
+            end % /Q
+        end % plotBasis
 
         function Xc = code( obj, X )
             %--------------------------------------------------------------
@@ -412,7 +486,7 @@ classdef tensorProductBspline
                 C = obj.Bspline( Q ).basis( X( :, Q ) );
                 if ( Q == 1 )
                     %------------------------------------------------------
-                    % Initialise the tensor product basisbasis
+                    % Initialise the tensor product basis
                     %------------------------------------------------------
                     B = C;
                 else
@@ -636,6 +710,14 @@ classdef tensorProductBspline
                 S( Q, : ) = cell2table( { obj.A( Q ), obj.B( Q ),... 
                       obj.K( Q ), { Knot }, obj.M( Q ) } );
             end
+        end
+        
+        function K = get.Knots( obj )
+            % Return the list of d-dimensional knot locations
+            [Ptr, K ] = deal( fullfact( obj.K ) );
+            for Q = 1:obj.NumDim
+                K( :, Q) = obj.Bspline( Q ).n( Ptr( :, Q ) );
+            end % /Q
         end
     end % Get/Set methods
 
