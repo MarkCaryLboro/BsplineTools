@@ -20,31 +20,55 @@ classdef tensorProductBspline
     end % protected properties
 
     methods
-        function obj = tensorProductBspline( M, K )
+        function obj = tensorProductBspline( M, K, Options )
             %--------------------------------------------------------------
             % class constructor: tensorProductBspline
             %
-            % obj = tensorProductBspline( M, K );
+            % obj = tensorProductBspline( NDim, M, K, Name, Value );
             %
             % Input Arguments:
             %
-            % M     --> (1,:) (int8) Vector of spline orders
-            % K     --> (1,:) (int8) Vector of number of knots
+            % M    --> (1,:) (int8) Vector of spline orders
+            % K    --> (1,:) (int8) Vector of number of knots
+            % Name --> (1,1) (string) spline configuration option. Can be:
+            %                "NDim" --> Number of dimensions {2}
+            %                "A" --> vector of lower input variable levels
+            %                "B" --> vector of upper input variable levels
             %--------------------------------------------------------------
             arguments
-                M       (1,:) int8 
-                K       (1,:) int8
+                M            (1,:) int8  = [ 4, 4]
+                K            (1,:) int8  = [ 2, 2]
+                Options.NDim (1,1) int8  = 2
+                Options.A    (1,:) double = [-3,-3]
+                Options.B    (1,:) double = [ 3, 3]
+                Options.Ka   (1,:) double = [ -2.8, -2.8 ]
+                Options.Kb   (1,:) double = [ 2.8, 2.8 ]
             end
-            Ok = ( numel( M ) == numel( K ) );
+            %--------------------------------------------------------------
+            % Set the spline order and number of knots per dimension
+            %--------------------------------------------------------------
+            Ok = ( numel( M ) == numel( K ) ) && ( numel(M) == Options.NDim );
             assert( Ok, "Dimension of order and knot vectors must match");
             obj.M = M;
             obj.K = K;
             %--------------------------------------------------------------
             % Set default data boundaries
             %--------------------------------------------------------------
-            obj.A = zeros( 1, obj.NumDim );
-            obj.B = ones( 1, obj.NumDim );
-            obj = obj.setKnotBounds();
+            Ok = ( numel( Options.A) == Options.NDim );
+            assert( Ok, "Dimension of lower bounds must be %2.0f", Options.NDim );
+            obj.A = Options.A;
+            Ok = ( numel( Options.B) == Options.NDim ); 
+            assert( Ok, "Dimension of upper bounds must be %2.0f", Options.NDim );
+            obj.B = Options.B;
+            Ok = ( numel( Options.Ka ) == ( Options.NDim ));
+            Ok = Ok & ( numel( Options.Kb ) == ( Options.NDim ));
+            if Ok
+                % Set custom values
+                obj = obj.setKnotBounds( Options.Ka, Options.Kb );
+            else
+                % Set defaults
+                obj = obj.setKnotBounds();
+            end
             obj = obj.define1Dsplines();
         end % constructor
         
@@ -175,11 +199,11 @@ classdef tensorProductBspline
             Ok = ( size( X, 2 ) == obj.NumDim );
             assert( Ok, "Data must be %3.0f-dimensional", obj.NumDim);
             %--------------------------------------------------------------
-            % Decode the data
+            % Code the data
             %--------------------------------------------------------------
             Xc = zeros( size( X ) );
             for Q = 1:obj.NumDim
-                Xc( :, Q ) = obj.Bspline( Q ).decode( Xc( :, Q ) );
+                Xc( :, Q ) = obj.Bspline( Q ).code( Xc( :, Q ) );
             end
         end % code
 
@@ -561,6 +585,27 @@ classdef tensorProductBspline
             ylabel( "Y" );
             zlabel( "Z" );
         end % mesh
+
+        function obj = setSplineOptions( obj, Options )
+            %--------------------------------------------------------------
+            % Define the one-dimensional spline options 
+            %
+            % Opts = obj.setSplineOptions( Name, Value )
+            %
+            % Input Arguments:
+            %
+            % Name --> (1,1) (string) spline configuration option. Can be:
+            %                "A" --> vector of lower input variable levels
+            %                "B" --> vector of upper input variable levels
+            %--------------------------------------------------------------
+            arguments
+                obj         (1,1) tensorProductBspline { mustBeNonempty( obj ) }
+                Options.A   (1,:) double = [ -3,3 ]
+                Options.B   (1,:) double = [ -3,3 ]
+            end
+            obj = obj.setLowerBounds( Options.A );
+            obj = obj.setUpperBounds( Options.B );
+        end % setSplineOptions
     end % Ordinary methods
 
     methods ( Access = protected )
@@ -738,7 +783,7 @@ classdef tensorProductBspline
                 hi = obj.B( Q );
                 ks = linspace( obj.Ka( Q ), obj.Kb( Q ), obj.K( Q ) + 2 );
                 ks = ks( 2:end-1 );
-                obj.Bspline( Q ) = bSplineTools( dx, ks, lo, hi);
+                obj.Bspline( Q ) = bSplineTools( double(dx), ks, lo, hi);
                 obj.Bspline( Q ).ka = obj.Ka( Q );
                 obj.Bspline( Q ).kb = obj.Kb( Q );
             end

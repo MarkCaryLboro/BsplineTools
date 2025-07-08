@@ -14,8 +14,9 @@ classdef bSplineTools
     end
     
     properties (GetAccess = public, SetAccess = protected)
-        p;          % roughness factor
-        kref;       % reference knot sequence
+        p     (1,1)  double                                    % roughness factor
+        kref  (:,1)  double                                    % reference knot sequence
+        order (1,1)  int8                                      % order for regularization term if used
     end
     
     properties (GetAccess = public, SetAccess = protected, Dependent = true)
@@ -23,7 +24,7 @@ classdef bSplineTools
         m;          % spline order (d+1)
         k;          % number of knots
         ak;         % augmented knot sequence
-        akc;        % Augemnted coded knot sequence
+        akc;        % Augmented coded knot sequence
         Gx          % multiplicative penalty function
         krefc       % coded reference knot sequence
         nb          % number of basis function
@@ -46,23 +47,32 @@ classdef bSplineTools
             % hi = data hi range limit
             %
             % obj = bSplineTools(dx,ks,lo,hi)
-            
-            if nargin>1 
-                obj.n = ks;
+            arguments
+                dx (1,1) double { mustBePositive( dx ) } = 3
+                ks (:,1) double = 0.4
+                lo (:,1) double = 0
+                hi (:,1) double = 1
             end
             
-            if nargin>0
-                obj.d = dx;
-            end
-            
-            if nargin>2
-                obj.a = lo;
-            end
-            
-            if nargin>3
+            if nargin>3 && ~isempty( hi )
                 obj.b = hi;
             end
-            
+                        
+            if nargin>2 && ~isempty( lo) && ( lo < obj.b )
+                obj.a = lo;
+            end
+            % Set default knot limits
+            obj.kb = 0.90*( obj.b - obj.a) + obj.a;
+            obj.ka = 0.10*( obj.b - obj.a) + obj.a;
+
+            if nargin>1 && ~isempty( ks )
+                obj.n = ks;
+            end
+
+            if nargin>0 && ~isempty( dx )
+                obj.d = dx;
+            end
+
         end
         
         function xc = code(obj,x)
@@ -189,7 +199,11 @@ classdef bSplineTools
             xlabel(xlab);
             ylabel(ylab);
             h = ah.Children;
-            leg = legend({'B-Spline','Fit Data', 'Knots'},'Location','NorthWest');
+            if isempty( obj.y ) || isempty( obj.x )
+                leg = legend({'B-Spline', 'Knots'},'Location','NorthWest');
+            else
+                leg = legend({'B-Spline','Fit Data', 'Knots'},'Location','NorthWest');
+            end
         end
 
         function  [ C, Ceq ] = evalNonlinConstraints( obj, X, Con )
@@ -363,6 +377,119 @@ classdef bSplineTools
             legend(legend_txt,'Location','EastOutside');
         end
         
+        function obj = regFit( obj, x, y, order, options, conStructure )
+            %--------------------------------------------------------------
+            % Regularized fit to the data. 
+            %
+            % NOTE: obj.a and obj.b must be set prior to calling this 
+            % method.
+            %
+            % obj = obj.fit( x, y, order, OPTIONS,conStructure);
+            %
+            % Input Arguments:
+            %
+            % x             --> Independent data vector which must lay in the interval [obj.a, obj.b];
+            % y             --> Dependent data.
+            % order         --> Regularization order
+            % options       --> optimoptions.fmincon object
+            % conStructure  --> Multi-dimensional structure specifying the
+            %                   constraints
+            %
+            %  OPTIONS is a optim.options.Fmincon object, that controls the
+            %  behaviour of fmincon. To generate this object use options =
+            %  optimoptions(@fmincon) at the command line. Then any
+            %  user-definable property can be set at the command line using
+            %  options.property = value. For example, to display
+            %  intermediate results use options.Display = 'iter';
+            %
+            % conStructure is a multi-dimensional structure specifiying the
+            % necessary constraints. The structure must have fields:
+            %
+            % derivative    --> set to 0,1 or 2 {0} to specify the spline
+            %                   derivative to which the constraint applies.
+            % type          --> set to '==','>=' or '<='
+            % value         --> constraint bound value
+            % x             --> x-ordinates at which constraints apply.
+            %                   Leave empty to specify all training
+            %                   x-ordinates
+            %
+            % For example, to specify the constraint that the
+            % minimum prediction from the spline must be >=10 
+            % at x = -2 and x = -1.5, specify:
+            %
+            % conStructure.derivative = 0;
+            % conStructure.type = '>=';
+            % conStructure.value = 10;
+            % conStructure.x = [-2;-1.5];
+            %
+            % Now assume that a second constraint applies; namely, that the
+            % second derivative of the spline must be negative over all the 
+            % training points. Then set:
+            %
+            % conStructure(2).derivative = 2;
+            % conStructure(2).type = '<=';
+            % conStructure(2).value = 0;
+            % conStructure(2).x = [];
+
+            arguments
+                obj (1,1) bSplineTools { mustBeNonempty( obj ) }
+                x   (:,1) double       { mustBeNonempty( x ) }
+                y   (:,1) double       { mustBeNonempty( y ) }
+                order (1,1) int8       { mustBeLessThan( order, 3 ),...
+                                         mustBeGreaterThanOrEqual( order, 0 )} = 2
+                options (:,:) struct     = struct.empty
+                conStructure (:,:) struct = struct.empty
+            end
+
+            if isempty(options) || ~isa(options,'optim.options.Fmincon')
+                options = optimoptions(@fmincon);
+                options.Algorithm = 'interior-point';         % Use interior-point algorithm
+                options.Display = 'iter';                     % display optimisation progress
+            end
+
+            % Assign reularisation order term
+            obj.order = order;
+
+            % Sort the x-data in ascending order and realign the y-data
+            % accordingly
+            [x,q] = sort(x);
+            y = y(q);
+            obj.x = x;
+            obj.y = y;
+
+            %--------------------------------------------------------------
+            % Determine start position
+            %--------------------------------------------------------------
+            cf = @(k)obj.regCostFcn(k,x,y);                                        % Define cost function
+            if isempty(conStructure)
+                confunc = [];                                                   % no constraints.
+            else
+                confunc = @(k)obj.constraintGenerator(k,x,y,conStructure);      % apply specified constraints
+            end
+            ko = rand(obj.k,201);                                               % [0,1] interval for starting knots
+            x0 = linspace(0,1,obj.k+2).';
+            x0 = x0(2:end-1);
+            Lold = inf;
+            for q = 1:100
+                L = feval(cf,ko(:,q));
+                if ~isempty(confunc)
+                    C = feval(confunc,ko(:,q));
+                else
+                    C = 0;
+                end
+                if (L<Lold && all(C<=0))
+                    x0 = ko(:,q);
+                    Lold = L;
+                end
+            end % for q
+
+            %--------------------------------------------------------------
+            % Set up the optimisation problem
+            %--------------------------------------------------------------
+
+
+        end % regFit
+
         function obj = fit(obj,x,y,options,conStructure)
             % Fit the spline to the data provided. Note obj.a and obj.b
             % must be set prior to calling this method.
@@ -532,21 +659,21 @@ classdef bSplineTools
         
         function  obj = set.a(obj,x)
             % Set lower limit for data
-            if nargin>1 && isnumeric(x) && isreal(x) && numel(x)==1
+            if nargin>1 && isnumeric(x) && isreal(x) && isscalar(x)
                 obj.a = x;
             end
         end
         
         function obj = set.b(obj,x)
             % Set upper limit for data
-            if nargin>1 && isnumeric(x) && isreal(x) && numel(x)==1
+            if nargin>1 && isnumeric(x) && isreal(x) && isscalar(x)
                 obj.b = x;
             end
         end
         
         function obj = set.d(obj,x)
             % Set degree of interpolating polynomial
-            if nargin>1 && numel(x)==1 && isnumeric(x) && isreal(x) && ~isempty(x) && x>=0
+            if nargin>1 && isscalar(x) && isnumeric(x) && isreal(x) && ~isempty(x) && x>=0
                 % set the degree of the interpolating polynomial
                 obj.d = round(x);
             end
@@ -621,10 +748,26 @@ classdef bSplineTools
             K = obj.nb + obj.k + 1;
             a = N*log(s2) + 2*K;
         end
-    end
+    end % ordinary methods
     
-    methods (Access = private, Hidden = true)
-                
+    methods ( Access = private )
+        function [L, coeff ] = regCostFcn( obj, k, x, y )
+            % Cost function for the regularised problem for optimal knot
+            % placement
+            %
+            % Input Arguments:
+            %
+            % k     --> knot sequence
+            % x     --> x-data
+            % y     --> y-data
+            % obj   --> bSplineTools object
+
+            k = sort( k );
+            obj.n = obj.decode(k);      % Assign knot sequence
+            X = obj.basis(x);           % Generate basis function matrix
+            
+        end % regCostFcn
+
         function [L,coeff] = costFcn(obj,k,x,y)
             % Penalised least squares cost function for optimal knot
             % placement. 
@@ -754,7 +897,7 @@ classdef bSplineTools
             
             d = threshold - obj.eval(x);
         end
-    end
+    end % private methods
     
     methods (Static =  true, Hidden = true)
         % Static methods
